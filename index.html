@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>convnet-cipher</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core@4.20.0/dist/tf-core.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl@4.20.0/dist/tf-backend-webgl.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgpu@4.20.0/dist/tf-backend-webgpu.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="text-slate-300 min-h-screen p-4 md:p-6 flex flex-col items-center relative lowercase">
+    <canvas id="bg-canvas"></canvas>
+
+    <div class="app-container w-full max-w-6xl relative z-10 flex flex-col items-center pb-12">
+        <header class="w-full mb-6 flex justify-between items-center border-b border-slate-800/80 pb-4">
+            <div>
+                <h1 class="text-xl font-mono font-bold text-cyan-400">convnet-cipher</h1>
+                <p class="text-xs text-slate-500 font-mono">deterministic tensor state-space stream cipher</p>
+            </div>
+            <div class="flex gap-2">
+                <span class="text-xs font-mono px-2.5 py-1 rounded bg-slate-900 text-slate-400 border border-slate-800">pbkdf2 / aes-256-ctr</span>
+                <span id="backendBadge" class="text-xs font-mono px-2.5 py-1 rounded bg-cyan-950 text-cyan-400 border border-cyan-800/50">detecting backend...</span>
+            </div>
+        </header>
+
+        <main class="w-full grid grid-cols-1 md:grid-cols-2 gap-5">
+            <!-- Encapsulation -->
+            <section class="glass-panel rounded-xl p-5 flex flex-col shadow-xl">
+                <h2 class="text-xs font-mono text-cyan-400 mb-2">authenticated encapsulation</h2>
+                <div class="relative mb-2">
+                    <input id="encKey" type="password" placeholder="passphrase / seed material" 
+                        class="w-full glass-subpanel rounded-lg p-2.5 pr-10 text-xs text-cyan-300 placeholder-slate-600 focus:outline-none focus:border-cyan-500 font-mono">
+                    <button type="button" onclick="toggleKeyVisibility('encKey', this)" class="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-cyan-400 focus:outline-none">
+                        <svg class="eye-icon w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        </svg>
+                    </button>
+                </div>
+                <textarea id="plainInput" rows="5" placeholder="plaintext payload buffer..." 
+                    class="w-full glass-subpanel rounded-lg p-3 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-cyan-500 font-mono resize-none"></textarea>
+                
+                <button id="btnEncrypt" onclick="handleEncrypt()" class="mt-3 w-full bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-mono font-bold py-2.5 rounded-lg transition-all text-xs tracking-wider">
+                    generate keystream & sign
+                </button>
+                
+                <div id="encOutputBox" class="mt-3 hidden">
+                    <label class="text-[11px] font-mono text-slate-500 mb-1 block">wire format (iv[16] || ciphertext[n] || hmac[32])</label>
+                    <div class="relative">
+                        <textarea id="cipherOutput" readonly rows="3" class="w-full glass-subpanel rounded-lg p-2.5 text-xs text-amber-400 font-mono resize-none"></textarea>
+                        <button onclick="copyToClipboard('cipherOutput')" class="absolute top-2 right-2 text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-1 rounded border border-slate-700 font-mono">copy</button>
+                    </div>
+                </div>
+
+                <!-- In-Browser Online Retraining Panel (Research Sandbox) -->
+                <div class="mt-4 pt-3 border-t border-slate-800/80 flex flex-col gap-2">
+                    <div class="flex justify-between items-center">
+                        <div class="flex items-center gap-1.5">
+                            <span class="text-[10px] font-mono text-slate-400 font-semibold">online fine-tune</span>
+                            <span class="text-[9px] font-mono px-1.5 py-0.2 rounded bg-amber-950/80 text-amber-400 border border-amber-800/50">research sandbox only</span>
+                        </div>
+                        <span id="trainStatusText" class="text-[10px] font-mono text-cyan-400">ready (1.33e-4 loss)</span>
+                    </div>
+                    <p class="text-[10px] font-mono text-slate-500 leading-tight">
+                        warning: retraining modifies local tensor manifold and desynchronizes decryption with standard clients.
+                    </p>
+                    <button id="btnTrain" onclick="handleBrowserTrain()" class="w-full bg-slate-900 hover:bg-slate-800 text-cyan-400 border border-cyan-900/60 font-mono py-2 rounded-lg transition-all text-xs">
+                        ⚡ fine-tune neural s-box (100 epochs on webgpu)
+                    </button>
+                    <div id="trainProgressContainer" class="w-full bg-slate-950 rounded-full h-1.5 hidden border border-slate-800">
+                        <div id="trainProgressBar" class="bg-cyan-500 h-1.5 rounded-full transition-all" style="width: 0%"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Decapsulation -->
+            <section class="glass-panel rounded-xl p-5 flex flex-col shadow-xl">
+                <h2 class="text-xs font-mono text-cyan-400 mb-2">decapsulation & verification</h2>
+                <div class="relative mb-2">
+                    <input id="decKey" type="password" placeholder="passphrase / seed material" 
+                        class="w-full glass-subpanel rounded-lg p-2.5 pr-10 text-xs text-cyan-300 placeholder-slate-600 focus:outline-none focus:border-cyan-500 font-mono">
+                    <button type="button" onclick="toggleKeyVisibility('decKey', this)" class="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-cyan-400 focus:outline-none">
+                        <svg class="eye-icon w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        </svg>
+                    </button>
+                </div>
+                <textarea id="cipherInput" rows="5" placeholder="wire format hex string..." 
+                    class="w-full glass-subpanel rounded-lg p-3 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-cyan-500 font-mono resize-none"></textarea>
+                
+                <button id="btnDecrypt" onclick="handleDecrypt()" class="mt-3 w-full bg-slate-800 hover:bg-slate-700 text-cyan-400 border border-slate-700 font-mono font-bold py-2.5 rounded-lg transition-all text-xs tracking-wider">
+                    verify mac & decrypt
+                </button>
+                
+                <div id="decOutputBox" class="mt-3 hidden">
+                    <label class="text-[11px] font-mono text-slate-500 mb-1 block">authenticated plaintext output</label>
+                    <div class="relative">
+                        <textarea id="plainOutput" readonly rows="3" class="w-full glass-subpanel rounded-lg p-2.5 text-xs text-emerald-400 font-mono resize-none"></textarea>
+                        <button onclick="copyToClipboard('plainOutput')" class="absolute top-2 right-2 text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-1 rounded border border-slate-700 font-mono">copy</button>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Runtime Metrics -->
+        <section id="metricsSection" class="w-full mt-4 grid grid-cols-2 md:grid-cols-4 gap-3 hidden">
+            <div class="glass-panel rounded-lg p-3">
+                <div class="text-[10px] font-mono text-slate-500">shannon entropy</div>
+                <div id="metricEntropy" class="text-base font-mono font-bold text-cyan-400 mt-0.5">0.0000</div>
+                <div class="text-[10px] font-mono text-slate-600">theoretical max: 8.0000 b/b</div>
+            </div>
+            <div class="glass-panel rounded-lg p-3">
+                <div class="text-[10px] font-mono text-slate-500">initialization vector</div>
+                <div id="metricNonce" class="text-xs font-mono font-bold text-amber-400 mt-1 truncate">0x00</div>
+                <div class="text-[10px] font-mono text-slate-600">128-bit session iv</div>
+            </div>
+            <div class="glass-panel rounded-lg p-3">
+                <div class="text-[10px] font-mono text-slate-500">mac status</div>
+                <div id="metricHmac" class="text-xs font-mono font-bold text-emerald-400 mt-1">✓ valid signature</div>
+                <div class="text-[10px] font-mono text-slate-600">rfc 2104 constant-time</div>
+            </div>
+            <div class="glass-panel rounded-lg p-3">
+                <div class="text-[10px] font-mono text-slate-500">execution latency</div>
+                <div id="metricLatency" class="text-base font-mono font-bold text-indigo-400 mt-0.5">0.00 ms</div>
+                <div class="text-[10px] font-mono text-slate-600">gpu accelerated runtime</div>
+            </div>
+        </section>
+
+        <!-- Extended NIST SP 800-22 Suite (10 Tests) -->
+        <section id="nistSection" class="w-full mt-4 glass-panel rounded-xl p-4 hidden">
+            <div class="flex justify-between items-center mb-3 px-1">
+                <div>
+                    <h2 class="text-xs font-mono text-cyan-400">nist sp 800-22 comprehensive statistical suite (10 tests)</h2>
+                    <p class="text-[10px] font-mono text-slate-500">hypothesis testing with berlekamp-massey linear complexity & cusum random walk</p>
+                </div>
+                <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800/60">α = 0.01 threshold</span>
+            </div>
+            
+            <div class="overflow-x-auto">
+                <table class="w-full text-left font-mono text-xs border-collapse">
+                    <thead>
+                        <tr class="border-b border-slate-800 text-slate-400 text-[11px]">
+                            <th class="py-2 px-3">test name</th>
+                            <th class="py-2 px-3">statistic</th>
+                            <th class="py-2 px-3">p-value</th>
+                            <th class="py-2 px-3">decision boundary</th>
+                            <th class="py-2 px-3 text-right">status</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-800/60 text-slate-300">
+                        <tr>
+                            <td class="py-2 px-3 font-semibold text-slate-200">01. frequency (monobit)</td>
+                            <td id="nistStatMonobit" class="py-2 px-3 text-cyan-300 font-mono">s_obs = 0.0000</td>
+                            <td id="nistPvalMonobit" class="py-2 px-3 text-amber-300 font-mono">p = 0.0000</td>
+                            <td class="py-2 px-3 text-slate-500">p ≥ 0.01 (bit balance)</td>
+                            <td id="nistStatusMonobit" class="py-2 px-3 text-right font-bold text-emerald-400">passed</td>
+                        </tr>
+                        <tr>
+                            <td class="py-2 px-3 font-semibold text-slate-200">02. frequency within block (m=128)</td>
+                            <td id="nistStatBlock" class="py-2 px-3 text-cyan-300 font-mono">χ² = 0.00</td>
+                            <td id="nistPvalBlock" class="py-2 px-3 text-amber-300 font-mono">p = 0.0000</td>
+                            <td class="py-2 px-3 text-slate-500">p ≥ 0.01 (local bit balance)</td>
+                            <td id="nistStatusBlock" class="py-2 px-3 text-right font-bold text-emerald-400">passed</td>
+                        </tr>
+                        <tr>
+                            <td class="py-2 px-3 font-semibold text-slate-200">03. cumulative sums (cusum forward)</td>
+                            <td id="nistStatCusumF" class="py-2 px-3 text-cyan-300 font-mono">z = 0.00</td>
+                            <td id="nistPvalCusumF" class="py-2 px-3 text-amber-300 font-mono">p = 0.0000</td>
+                            <td class="py-2 px-3 text-slate-500">p ≥ 0.01 (random walk boundary)</td>
+                            <td id="nistStatusCusumF" class="py-2 px-3 text-right font-bold text-emerald-400">passed</td>
+                        </tr>
+                        <tr>
+                            <td class="py-2 px-3 font-semibold text-slate-200">04. runs (transitions)</td>
+                            <td id="nistStatRuns" class="py-2 px-3 text-cyan-300 font-mono">v_n = 0</td>
+                            <td id="nistPvalRuns" class="py-2 px-3 text-amber-300 font-mono">p = 0.0000</td>
+                            <td class="py-2 px-3 text-slate-500">p ≥ 0.01 (oscillation rate)</td>
+                            <td id="nistStatusRuns" class="py-2 px-3 text-right font-bold text-emerald-400">passed</td>
+                        </tr>
+                        <tr>
+                            <td class="py-2 px-3 font-semibold text-slate-200">05. discrete fourier transform (spectral)</td>
+                            <td id="nistStatDft" class="py-2 px-3 text-cyan-300 font-mono">d = 0.0000</td>
+                            <td id="nistPvalDft" class="py-2 px-3 text-amber-300 font-mono">p = 0.0000</td>
+                            <td class="py-2 px-3 text-slate-500">p ≥ 0.01 (no periodic peaks)</td>
+                            <td id="nistStatusDft" class="py-2 px-3 text-right font-bold text-emerald-400">passed</td>
+                        </tr>
+                        <tr>
+                            <td class="py-2 px-3 font-semibold text-slate-200">06. non-overlapping template (m=9)</td>
+                            <td id="nistStatTemplate" class="py-2 px-3 text-cyan-300 font-mono">χ² = 0.00</td>
+                            <td id="nistPvalTemplate" class="py-2 px-3 text-amber-300 font-mono">p = 0.0000</td>
+                            <td class="py-2 px-3 text-slate-500">p ≥ 0.01 (aperiodic pattern count)</td>
+                            <td id="nistStatusTemplate" class="py-2 px-3 text-right font-bold text-emerald-400">passed</td>
+                        </tr>
+                        <tr>
+                            <td class="py-2 px-3 font-semibold text-slate-200">07. approximate entropy (apen, m=2)</td>
+                            <td id="nistStatApen" class="py-2 px-3 text-cyan-300 font-mono">apen = 0.0000</td>
+                            <td id="nistPvalApen" class="py-2 px-3 text-amber-300 font-mono">p = 0.0000</td>
+                            <td class="py-2 px-3 text-slate-500">p ≥ 0.01 (block regularity)</td>
+                            <td id="nistStatusApen" class="py-2 px-3 text-right font-bold text-emerald-400">passed</td>
+                        </tr>
+                        <tr>
+                            <td class="py-2 px-3 font-semibold text-slate-200">08. serial test (m=2)</td>
+                            <td id="nistStatSerial" class="py-2 px-3 text-cyan-300 font-mono">ψ² = 0.00</td>
+                            <td id="nistPvalSerial" class="py-2 px-3 text-amber-300 font-mono">p = 0.0000</td>
+                            <td class="py-2 px-3 text-slate-500">p ≥ 0.01 (pattern transitions)</td>
+                            <td id="nistStatusSerial" class="py-2 px-3 text-right font-bold text-emerald-400">passed</td>
+                        </tr>
+                        <tr>
+                            <td class="py-2 px-3 font-semibold text-slate-200">09. linear complexity (berlekamp-massey)</td>
+                            <td id="nistStatLinear" class="py-2 px-3 text-cyan-300 font-mono">χ² = 0.00 (m=500)</td>
+                            <td id="nistPvalLinear" class="py-2 px-3 text-amber-300 font-mono">p = 0.0000</td>
+                            <td class="py-2 px-3 text-slate-500">p ≥ 0.01 (lfsr cryptanalysis)</td>
+                            <td id="nistStatusLinear" class="py-2 px-3 text-right font-bold text-emerald-400">passed</td>
+                        </tr>
+                        <tr>
+                            <td class="py-2 px-3 font-semibold text-slate-200">10. chi-square goodness-of-fit</td>
+                            <td id="nistStatChi" class="py-2 px-3 text-cyan-300 font-mono">χ² = 0.00 (df=255)</td>
+                            <td id="nistPvalChi" class="py-2 px-3 text-amber-300 font-mono">p = 0.0000</td>
+                            <td class="py-2 px-3 text-slate-500">p ≥ 0.01 (byte uniformity)</td>
+                            <td id="nistStatusChi" class="py-2 px-3 text-right font-bold text-emerald-400">passed</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Activations & Per-Layer Entropy Cards -->
+        <section id="visSection" class="w-full mt-4 glass-panel rounded-xl p-4 hidden">
+            <div class="flex justify-between items-center mb-3 px-1">
+                <div>
+                    <h2 class="text-xs font-mono text-slate-300 font-bold">layer activation manifolds & layer-wise entropy profiling</h2>
+                    <p class="text-[10px] font-mono text-slate-500">real-time tensor space attractor evolution with per-layer shannon entropy</p>
+                </div>
+                <span class="text-[10px] font-mono text-cyan-400 bg-cyan-950 px-2 py-0.5 rounded border border-cyan-800/40">6-stage pipeline</span>
+            </div>
+            
+            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
+                <div class="flex flex-col items-center glass-subpanel p-2 rounded">
+                    <span class="text-[9px] font-mono text-cyan-400 mb-1">01. input state [1x32]</span>
+                    <canvas id="cvs_0" width="32" height="32" class="w-full aspect-square rounded pixelated"></canvas>
+                    <div class="w-full mt-2 pt-1 border-t border-slate-800/80 font-mono text-[9px] space-y-0.5 text-slate-400">
+                        <div class="flex justify-between"><span>entropy:</span><span id="lm_h_0" class="text-cyan-300">0.000</span></div>
+                        <div class="flex justify-between"><span>std dev (σ):</span><span id="lm_sd_0" class="text-amber-300">0.00</span></div>
+                        <div class="flex justify-between"><span>range:</span><span id="lm_rg_0" class="text-slate-500">[-128, 127]</span></div>
+                    </div>
+                </div>
+                <div class="flex flex-col items-center glass-subpanel p-2 rounded">
+                    <span class="text-[9px] font-mono text-cyan-400 mb-1">02. multi-scale stem</span>
+                    <canvas id="cvs_1" width="32" height="32" class="w-full aspect-square rounded pixelated"></canvas>
+                    <div class="w-full mt-2 pt-1 border-t border-slate-800/80 font-mono text-[9px] space-y-0.5 text-slate-400">
+                        <div class="flex justify-between"><span>entropy:</span><span id="lm_h_1" class="text-cyan-300">0.000</span></div>
+                        <div class="flex justify-between"><span>std dev (σ):</span><span id="lm_sd_1" class="text-amber-300">0.00</span></div>
+                        <div class="flex justify-between"><span>range:</span><span id="lm_rg_1" class="text-slate-500">[-128, 127]</span></div>
+                    </div>
+                </div>
+                <div class="flex flex-col items-center glass-subpanel p-2 rounded">
+                    <span class="text-[9px] font-mono text-cyan-400 mb-1">03. channel scaling</span>
+                    <canvas id="cvs_2" width="32" height="32" class="w-full aspect-square rounded pixelated"></canvas>
+                    <div class="w-full mt-2 pt-1 border-t border-slate-800/80 font-mono text-[9px] space-y-0.5 text-slate-400">
+                        <div class="flex justify-between"><span>entropy:</span><span id="lm_h_2" class="text-cyan-300">0.000</span></div>
+                        <div class="flex justify-between"><span>std dev (σ):</span><span id="lm_sd_2" class="text-amber-300">0.00</span></div>
+                        <div class="flex justify-between"><span>range:</span><span id="lm_rg_2" class="text-slate-500">[-128, 127]</span></div>
+                    </div>
+                </div>
+                <div class="flex flex-col items-center glass-subpanel p-2 rounded">
+                    <span class="text-[9px] font-mono text-cyan-400 mb-1">04. depthwise stage 1</span>
+                    <canvas id="cvs_3" width="16" height="16" class="w-full aspect-square rounded pixelated"></canvas>
+                    <div class="w-full mt-2 pt-1 border-t border-slate-800/80 font-mono text-[9px] space-y-0.5 text-slate-400">
+                        <div class="flex justify-between"><span>entropy:</span><span id="lm_h_3" class="text-cyan-300">0.000</span></div>
+                        <div class="flex justify-between"><span>std dev (σ):</span><span id="lm_sd_3" class="text-amber-300">0.00</span></div>
+                        <div class="flex justify-between"><span>range:</span><span id="lm_rg_3" class="text-slate-500">[-128, 127]</span></div>
+                    </div>
+                </div>
+                <div class="flex flex-col items-center glass-subpanel p-2 rounded">
+                    <span class="text-[9px] font-mono text-cyan-400 mb-1">05. pointwise diffusion</span>
+                    <canvas id="cvs_4" width="16" height="16" class="w-full aspect-square rounded pixelated"></canvas>
+                    <div class="w-full mt-2 pt-1 border-t border-slate-800/80 font-mono text-[9px] space-y-0.5 text-slate-400">
+                        <div class="flex justify-between"><span>entropy:</span><span id="lm_h_4" class="text-cyan-300">0.000</span></div>
+                        <div class="flex justify-between"><span>std dev (σ):</span><span id="lm_sd_4" class="text-amber-300">0.00</span></div>
+                        <div class="flex justify-between"><span>range:</span><span id="lm_rg_4" class="text-slate-500">[-128, 127]</span></div>
+                    </div>
+                </div>
+                <div class="flex flex-col items-center glass-subpanel p-2 rounded">
+                    <span class="text-[9px] font-mono text-cyan-400 mb-1">06. latent projection</span>
+                    <canvas id="cvs_5" width="16" height="16" class="w-full aspect-square rounded pixelated"></canvas>
+                    <div class="w-full mt-2 pt-1 border-t border-slate-800/80 font-mono text-[9px] space-y-0.5 text-slate-400">
+                        <div class="flex justify-between"><span>entropy:</span><span id="lm_h_5" class="text-cyan-300">0.000</span></div>
+                        <div class="flex justify-between"><span>std dev (σ):</span><span id="lm_sd_5" class="text-amber-300">0.00</span></div>
+                        <div class="flex justify-between"><span>range:</span><span id="lm_rg_5" class="text-slate-500">[-128, 127]</span></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <footer class="mt-8 text-center text-[10px] font-mono text-slate-600">
+            experimental research prototype • authenticated encryption via webcrypto pbkdf2/aes-256-ctr/hmac-sha256 • not certified for production critical systems
+        </footer>
+    </div>
+
+    <!-- Script Sıralaması -->
+    <script src="js/weights-data.js"></script>
+    <script src="js/nn-layers.js"></script>
+    <script src="js/crypto.js"></script>
+    <script src="js/nist.js"></script>
+    <script src="js/ui.js"></script>
+</body>
+</html>

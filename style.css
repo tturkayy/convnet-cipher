@@ -1,0 +1,40 @@
+body { 
+    background-color: #060911; 
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace; 
+    overflow-x: hidden; 
+}
+#bg-canvas { 
+    position: fixed; 
+    top: 0; 
+    left: 0; 
+    width: 100vw; 
+    height: 100vh; 
+    z-index: 0; 
+    pointer-events: none; 
+}
+.app-container {
+    zoom: 1.2;
+    transform-origin: top center;
+}
+@supports not (zoom: 1.2) {
+    .app-container {
+        transform: scale(1.2);
+        transform-origin: top center;
+        margin-bottom: 20%;
+    }
+}
+.glass-panel { 
+    background: rgba(13, 20, 36, 0.75); 
+    backdrop-filter: blur(12px); 
+    border: 1px solid rgba(30, 41, 59, 0.8); 
+}
+.glass-subpanel { 
+    background: rgba(6, 9, 17, 0.85); 
+    border: 1px solid rgba(30, 41, 59, 0.8); 
+}
+.pixelated {
+    image-rendering: -moz-crisp-edges;
+    image-rendering: -webkit-crisp-edges;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+}
