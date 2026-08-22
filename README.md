@@ -54,4 +54,4 @@ python -m http.server 8000
 
 ## license
 
-this project is licensed under the **gnu affero general public license v3.0 (agpl-3.0)**. see the [license](license) file for full text details.
+this project is licensed under the **gnu affero general public license v3.0 (agpl-3.0)**. see the [license](LICENSE) file for full text details.
