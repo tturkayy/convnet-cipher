@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>convnet-cipher — deterministic tensor stream cipher</title>
+  <title>convnet-cipher — convolutional network cipher</title>
 
   <script>
     (function() {
@@ -80,7 +80,7 @@
       transition: background-color 0.3s ease, color 0.3s ease;
     }
 
-    #bg-canvas {
+    #warp-canvas {
       position: fixed;
       top: 0; left: 0;
       width: 100vw; height: 100vh;
@@ -151,25 +151,10 @@
     }
     @keyframes morphWord {
       0%, 15%, 85%, 100% { max-width: 0; opacity: 0; transform: translateY(1px); }
-      35%, 65% { max-width: 80px; opacity: 1; transform: translateY(0); }
+      35%, 65% { max-width: 120px; opacity: 1; transform: translateY(0); }
     }
 
     .header-actions { display: flex; align-items: center; gap: 0.5rem; }
-    .badge {
-      font-family: var(--mono);
-      font-size: 0.72rem;
-      padding: 0.35rem 0.7rem;
-      border-radius: 9999px;
-      background: var(--bg-subtle);
-      border: 1px solid var(--border);
-      color: var(--text-muted);
-      text-transform: lowercase;
-    }
-    .badge.accent {
-      background: var(--accent-soft);
-      color: var(--accent);
-      border-color: var(--accent);
-    }
 
     .theme-icon-btn {
       background: var(--surface);
@@ -180,6 +165,7 @@
       border-radius: 50%;
       font-size: 0.95rem;
       display: flex; align-items: center; justify-content: center;
+      text-decoration: none;
       transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
     .theme-icon-btn:hover {
@@ -344,6 +330,17 @@
       transition: width 0.2s ease;
     }
 
+    .badge {
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      padding: 0.35rem 0.7rem;
+      border-radius: 9999px;
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      text-transform: lowercase;
+    }
+
     .metrics-grid {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
@@ -426,6 +423,18 @@
       border-top: 1px dashed var(--border);
       text-transform: lowercase;
     }
+    .footer-author {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-weight: 600;
+      transition: all 0.2s ease;
+      border-bottom: 1px dotted var(--border-hover);
+      padding-bottom: 1px;
+    }
+    .footer-author:hover {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+    }
 
     .hidden { display: none !important; }
 
@@ -446,17 +455,21 @@
 <body>
 
   <div class="ambient-glow"></div>
-  <canvas id="bg-canvas"></canvas>
+  <canvas id="warp-canvas"></canvas>
+
+  <!-- JS uyumluluğu için görünmez referans -->
+  <span id="backendBadge" style="display:none;"></span>
 
   <div class="app-wrapper">
     <header>
       <a href="#" class="brand-morph" onclick="event.preventDefault();">
-        <span>conv</span><span class="morph-expand">net&nbsp;</span><span>ci</span><span class="morph-expand">pher&nbsp;</span><span>stream</span>
+        <span>conv</span><span class="morph-expand">olutional&nbsp;</span><span>net</span><span class="morph-expand">work&nbsp;</span><span>cipher</span>
       </a>
 
       <div class="header-actions">
-        <span class="badge">pbkdf2 / aes-256-ctr</span>
-        <span id="backendBadge" class="badge accent">detecting backend...</span>
+        <a href="https://github.com/tturkayy" target="_blank" class="theme-icon-btn" title="GitHub">
+          <i class="fab fa-github"></i>
+        </a>
         <button class="theme-icon-btn" id="themeCycleBtn" aria-label="toggle theme">
           <i id="themeIcon" class="fas fa-sun"></i>
         </button>
@@ -734,8 +747,9 @@
       </div>
     </section>
 
+    <!-- Footer -->
     <footer class="page-footer">
-      convnet-cipher • authenticated stream cipher manifold • experimental research prototype
+      convnet-cipher protocol • deterministic tensor state-space stream cipher • <a href="https://tturkayy.github.io/" target="_blank" rel="noopener noreferrer" class="footer-author">türkay yıldırım</a>
     </footer>
   </div>
 
@@ -761,7 +775,7 @@
     });
 
     // Mesh Grid Çizimi
-    const wCanvas = document.getElementById('bg-canvas');
+    const wCanvas = document.getElementById('warp-canvas');
     const wCtx = wCanvas.getContext('2d');
     let wW, wH, mX = -9999, mY = -9999, tmX = -9999, tmY = -9999;
 
